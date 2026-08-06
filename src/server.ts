@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import subjectRouter from "./routes/subjects.js"
 import cors from "cors";
