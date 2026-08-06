@@ -8,6 +8,13 @@
       "when": 1785485109041,
       "tag": "0000_thin_jasper_sitwell",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785993780451,
+      "tag": "0001_clammy_kid_colt",
+      "breakpoints": true
     }
   ]
 }
