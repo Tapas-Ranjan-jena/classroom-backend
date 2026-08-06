@@ -1,7 +1,7 @@
 import express from "express";
 import { ilike, or, and, sql, eq, desc, getTableColumns } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { classes, subjects, user } from "../db/schema/index.js";
+import { classes, subjects, user, enrollments } from "../db/schema/index.js";
 import { departments } from "../db/schema/index.js";
 
 const router = express.Router();
@@ -114,8 +114,8 @@ router.post('/', async (req, res) => {
     try {
         const [createdClass] = await db
             .insert(classes)
-            .values({ ...req.body, inviteCode: Math.random().toString(36).substring(2, 9), schedules: []})
-            .returning({ id: classes.id });
+            .values({ ...req.body, inviteCode: Math.random().toString(36).substring(2, 9), schedules: req.body.schedules ?? [] })
+            .returning();
 
         if(!createdClass) throw Error;
 
@@ -123,6 +123,84 @@ router.post('/', async (req, res) => {
     } catch (e) {
         console.error(`POST /classes error ${e}`);
         res.status(500).json({ error: e});
+    }
+});
+
+router.put('/:id', async (req, res) => {
+    try {
+        const classId = Number(req.params.id);
+        const [updatedClass] = await db
+            .update(classes)
+            .set({ ...req.body })
+            .where(eq(classes.id, classId))
+            .returning();
+
+        if (!updatedClass) {
+            return res.status(404).json({ error: 'Class not found' });
+        }
+        res.status(200).json({ data: updatedClass });
+    } catch (e) {
+        console.error(`PUT /classes/:id error ${e}`);
+        res.status(500).json({ error: 'Failed to update class' });
+    }
+});
+
+router.delete('/:id', async (req, res) => {
+    try {
+        const classId = Number(req.params.id);
+        const [deletedClass] = await db.delete(classes).where(eq(classes.id, classId)).returning();
+        if (!deletedClass) {
+            return res.status(404).json({ error: 'Class not found' });
+        }
+        res.status(200).json({ data: deletedClass });
+    } catch (e) {
+        console.error(`DELETE /classes/:id error ${e}`);
+        res.status(500).json({ error: 'Failed to delete class' });
+    }
+});
+
+router.post('/join', async (req, res) => {
+    try {
+        const { inviteCode, studentId } = req.body;
+        if (!inviteCode || !studentId) {
+            return res.status(400).json({ error: 'Invite code and student ID are required' });
+        }
+
+        const [foundClass] = await db.select().from(classes).where(eq(classes.inviteCode, inviteCode));
+        if (!foundClass) {
+            return res.status(404).json({ error: 'Invalid invite code' });
+        }
+
+        // Check if student already enrolled
+        const [existingEnrollment] = await db
+            .select()
+            .from(enrollments)
+            .where(and(eq(enrollments.classId, foundClass.id), eq(enrollments.studentId, studentId)));
+
+        if (existingEnrollment) {
+            return res.status(400).json({ error: 'Already enrolled in this class' });
+        }
+
+        // Check capacity
+        const countRes = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(enrollments)
+            .where(eq(enrollments.classId, foundClass.id));
+        const currentEnrolled = Number(countRes[0]?.count ?? 0);
+
+        if (currentEnrolled >= foundClass.capacity) {
+            return res.status(400).json({ error: 'Class capacity has been reached' });
+        }
+
+        const [newEnrollment] = await db
+            .insert(enrollments)
+            .values({ classId: foundClass.id, studentId })
+            .returning();
+
+        res.status(201).json({ data: { enrollment: newEnrollment, class: foundClass } });
+    } catch (e) {
+        console.error(`POST /classes/join error ${e}`);
+        res.status(500).json({ error: 'Failed to join class' });
     }
 });
 

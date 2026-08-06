@@ -64,4 +64,82 @@ router.get('/', async (req, res) => {
     }
 });
 
+router.get('/:id', async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const [foundUser] = await db.select().from(user).where(eq(user.id, userId));
+        if (!foundUser) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.status(200).json({ data: foundUser });
+    } catch (e) {
+        console.error(`GET /users/:id error: ${e}`);
+        res.status(500).json({ error: 'Failed to get user' });
+    }
+});
+
+router.post('/', async (req, res) => {
+    try {
+        const { id, name, email, role, emailVerified, image, imageCldPubId } = req.body;
+        const userId = id || `user_${Date.now()}`;
+        const [newUser] = await db
+            .insert(user)
+            .values({
+                id: userId,
+                name: name || 'New User',
+                email: email,
+                role: role || 'student',
+                emailVerified: emailVerified ?? false,
+                image: image ?? null,
+                imageCldPubId: imageCldPubId ?? null,
+            })
+            .returning();
+        res.status(201).json({ data: newUser });
+    } catch (e) {
+        console.error(`POST /users error: ${e}`);
+        res.status(500).json({ error: 'Failed to create user' });
+    }
+});
+
+router.put('/:id', async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { name, email, role, image, imageCldPubId, emailVerified } = req.body;
+        const [updatedUser] = await db
+            .update(user)
+            .set({
+                ...(name && { name }),
+                ...(email && { email }),
+                ...(role && { role }),
+                ...(image !== undefined && { image }),
+                ...(imageCldPubId !== undefined && { imageCldPubId }),
+                ...(emailVerified !== undefined && { emailVerified }),
+            })
+            .where(eq(user.id, userId))
+            .returning();
+
+        if (!updatedUser) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.status(200).json({ data: updatedUser });
+    } catch (e) {
+        console.error(`PUT /users/:id error: ${e}`);
+        res.status(500).json({ error: 'Failed to update user' });
+    }
+});
+
+router.delete('/:id', async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const [deletedUser] = await db.delete(user).where(eq(user.id, userId)).returning();
+        if (!deletedUser) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.status(200).json({ data: deletedUser });
+    } catch (e) {
+        console.error(`DELETE /users/:id error: ${e}`);
+        res.status(500).json({ error: 'Failed to delete user' });
+    }
+});
+
 export default router;
